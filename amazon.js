@@ -23,7 +23,14 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     await waitForResults(page);
     await delay(300);
     const data = await extractDataProduct(page);
-    console.log("product : ", data);
+    // console.log("product : ", data);
+    const token = await getDataState(page);
+    const { asin, lazyWidgetCsrfToken } = token;
+
+    await getDataReviews(
+      "B0CN9319S7",
+      "hKvVKcJaEeYJQ0zKUY23/ATaNaPRK695u5fTcQJhZl1pAAAAAGdf6YEAAAAB"
+    );
   } catch (error) {
     console.error("Error scraping Amazon:", error.message);
   } finally {
@@ -35,22 +42,42 @@ const extractDataProduct = async (page) => {
   const data = await page.evaluate(() => {
     const title = document.querySelector("#productTitle")?.innerText.trim();
 
-    let salePrice = document
-      .querySelector("span.a-size-small .a-price  span.a-offscreen")
+    // testing
+    const code = document
+      .querySelector("span.cr-widget-PageState .cr-state-object")
       ?.innerText.trim();
-    let originalPrice = document
-      .querySelector(".a-price  span.a-offscreen")
-      ?.innerText.trim();
+
+    ///========
+
+    let salePrice =
+      parseFloat(
+        document
+          .querySelector("span.a-size-small .a-price  span.a-offscreen")
+          ?.innerText.trim()
+          .replace(/[^0-9.]/g, "")
+      ) || null;
+    let originalPrice =
+      parseFloat(
+        document
+          .querySelector(".a-price  span.a-offscreen")
+          ?.innerText.trim()
+          .replace(/[^0-9.]/g, "")
+      ) || null;
     if (salePrice) {
       salePrice = originalPrice;
-      originalPrice = document
-        .querySelector("span.a-size-small .a-price  span.a-offscreen")
-        ?.innerText.trim();
+      originalPrice =
+        parseFloat(
+          document
+            .querySelector("span.a-size-small .a-price  span.a-offscreen")
+            ?.innerText.trim()
+            .replace(/[^0-9.]/g, "")
+        ) || null;
     }
     const thumbnail = document.querySelector("img.a-dynamic-image")?.src;
-    const soldText = document
-      .querySelector("#social-proofing-faceout-title-tk_bought")
-      ?.innerText.trim();
+    const soldText =
+      document
+        .querySelector("#social-proofing-faceout-title-tk_bought")
+        ?.innerText.trim() || null;
     const sold = soldText
       ? (() => {
           const numberPart = soldText.split(" ")[0];
@@ -91,14 +118,15 @@ const extractDataProduct = async (page) => {
     };
     const country = findCountry();
     return {
-      thumbnail,
-      title,
-      originalPrice,
-      salePrice,
-      avg_rating,
-      total_reviews,
-      country,
-      sold,
+      // thumbnail,
+      // title,
+      // originalPrice,
+      // salePrice,
+      // avg_rating,
+      // total_reviews,
+      // country,
+      // sold,
+      code,
     };
   });
   console.log("extract data successfully");
@@ -106,72 +134,75 @@ const extractDataProduct = async (page) => {
 };
 
 const waitForResults = async (page) => {
-  console.log("Waiting for results to load...");
+  console.log("Scrolling to find review button...");
   console.time("Results Load Time");
   try {
-    console.log("load until see all review link foot");
-    await page.waitForSelector('[data-hook="see-all-reviews-link-foot"]', {
-      timeout: 60000,
-    });
+    let reviewButton = await page.$('[data-hook="write-review-button"]');
+
+    while (reviewButton === null) {
+      console.log("Scrolling down...");
+      await page.evaluate(() => window.scrollBy(0, 500));
+      await delay(1000);
+      reviewButton = await page.$('[data-hook="write-review-button"]');
+    }
+    await page.evaluate(() => window.scrollBy(0, 1200));
+    console.log("Review button found!");
+    await delay(2000);
   } catch (error) {
-    console.error("Results did not load in time:", error);
-    throw new Error("Results did not load in time");
+    console.error("Failed to find review button:", error);
+    throw error;
   }
   console.timeEnd("Results Load Time");
 };
-
-// const waitForReview = async (page) => {
-//   console.log("Waiting for reviews to load...");
-//   console.time("Results Load Time");
-//   try {
-//     const reviewSelector = `[data-hook="see-all-reviews-link-foot"]`;
-//     let reviewsLoaded = false;
-
-//     while (!reviewsLoaded) {
-//       // Cuộn xuống một khoảng chiều cao của cửa sổ
-//       await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-//       await delay(3000); // Delay để cho trang tải nội dung mới
-
-//       // Kiểm tra sự hiện diện của phần tử
-//       reviewsLoaded = await page.evaluate((selector) => {
-//         return !!document.querySelector(selector); // Trả về true nếu phần tử tồn tại
-//       }, reviewSelector);
-//     }
-
-//     console.log("Reviews loaded successfully.");
-//   } catch (error) {
-//     console.error("Review did not load in time:", error);
-//     throw new Error("Review did not load in time");
-//   }
-
-//   console.timeEnd("Results Load Time");
-// };
-// Click the 'Find image source' button
-
-const waitForReview = async (page, minReviews = 10, timeout = 30000) => {
-  console.log("Waiting for reviews to load...");
-  console.time("Results Load Time");
-
-  const navSelector = "span.navFooterBackToTopText";
+// hKQWqcAh6+0DkTY18seNCfO90evH6x/NLvCu7eDDFlUOAAAAAGdf69M1NzE4NDgzNy04ZjliLTRkNTItOWI3ZC0yNzBhMmM2ZTA5Mjg
+const getDataState = async (page) => {
   try {
-    while (true) {
-      // Cuộn xuống trang
-      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-      await delay(1000); // Chờ nội dung tải
-      // Kiểm tra số lượng review đã tải
-      const reviewsCount = await page.evaluate((selector) => {
-        return document.querySelectorAll(selector).length;
-      }, navSelector);
-      console.log(`Current reviews count: ${reviewsCount}`);
-      // Nếu có đủ review, thoát khỏi vòng lặp
-      if (reviewsCount >= minReviews) {
-        console.log("Sufficient reviews loaded.");
-        break;
-      }
-    }
+    // Chọn phần tử có id="cr-state-object" và lấy giá trị trong data-state
+    const dataState = await page.$eval("#cr-state-object", (element) =>
+      element.getAttribute("data-state")
+    );
+
+    // Chuyển đổi giá trị JSON từ chuỗi nếu cần
+    const stateObject = JSON.parse(dataState);
+
+    // console.log("Data State:", stateObject);
+
+    return stateObject;
   } catch (error) {
-    console.error("Error while loading reviews:", error);
-    throw new Error("Error while loading reviews");
+    console.error("Failed to retrieve data-state:", error);
   }
-  console.timeEnd("Results Load Time");
+};
+const getDataReviews = async (asin, csrf) => {
+  const language = "en_US";
+  try {
+    const response = await fetchDataReview(asin, csrf, language);
+    console.log("Reviews Data successful-->>".response);
+    // return await extractDataReviews(response?.data?.evaViewList);
+  } catch (error) {
+    console.error("Error fetching reviews:", error.message);
+  }
+};
+const fetchDataReview = async (asin, csrf, language) => {
+  const url = `https://www.amazon.com/hz/reviews-render/ajax/lazy-widgets/stream?asin=${asin}&csrf=${csrf}&language=${language}&lazyWidget=cr-age-recommendation&lazyWidget=cr-solicitation`;
+  console.log("URL:", url);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      // headers: {
+      //   "Content-Type": "application/json",
+      // },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API call failed with status: ${response.status}`);
+    }
+
+    console.log("Response Data:", response);
+
+    return response;
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    throw error;
+  }
 };
