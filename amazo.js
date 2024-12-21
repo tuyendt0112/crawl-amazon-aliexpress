@@ -34,17 +34,16 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     // );
 
     // Example usage
-    const asin = "B0DG7H487F";
-
+    const asin = "B0B42JCKR7";
     const countryDomain = "www.amazon.com";
     const filterOptions = {
       page: 1,
       sortBy: "recent",
+      //   reviewerType: "all_reviews",
       scope: "reviewsAjax1",
-      reviewerType: "all_reviews",
     };
-    const preset = { Locale: "en-US" };
-    fetchReviews(countryDomain, asin, filterOptions, preset)
+
+    fetchReviews(countryDomain, asin, filterOptions)
       .then((reviews) => {
         console.log("Fetched reviews:", reviews);
       })
@@ -192,108 +191,126 @@ const getDataState = async (page) => {
     console.error("Failed to retrieve data-state:", error);
   }
 };
-const getDataReviews = async (asin, csrf) => {
-  const language = "en_US";
-  try {
-    const response = await fetchDataReview(asin, csrf, language);
-    console.log("Reviews Data successful-->>".response);
-    // return await extractDataReviews(response?.data?.evaViewList);
-  } catch (error) {
-    console.error("Error fetching reviews:", error.message);
-  }
-};
-const fetchDataReview = async (asin, csrf, language) => {
-  const url = `https://www.amazon.com/hz/reviews-render/ajax/lazy-widgets/stream?asin=${asin}&csrf=${csrf}&language=${language}&lazyWidget=cr-age-recommendation&lazyWidget=cr-solicitation`;
-  console.log("URL:", url);
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      // headers: {
-      //   "Content-Type": "application/json",
-      // },
-    });
+function buildReviewUrl(countryDomain) {
+  return `https://${countryDomain}/hz/reviews-render/ajax/medley-filtered-reviews/get/ref=cm_cr_dp_d_fltrs_srt`;
+}
+function buildFormData(asin, filterOptions) {
+  const formData = new URLSearchParams();
 
-    if (!response.ok) {
-      throw new Error(`API call failed with status: ${response.status}`);
-    }
+  // Required fields
+  formData.append("language", filterOptions.language || "en_US");
+  formData.append("asin", asin);
+  formData.append("sortBy", filterOptions.sortBy || "recent");
+  formData.append("scope", filterOptions.scope || "reviewsAjax1");
 
-    console.log("Response Data:", response);
-
-    return response;
-  } catch (error) {
-    console.error("Error fetching data:", error);
-    throw error;
-  }
-};
-
-const reviewURLBuilder = (countryDomain, asin, filterOptions) => {
-  const baseURL = new URL("https://" + countryDomain);
-  baseURL.pathname =
-    "/hz/reviews-render/ajax/medley-filtered-reviews/get/ref=cm_cr_dp_d_fltrs_srt";
-
-  const params = new URLSearchParams({
-    scope: filterOptions.scope,
-    asin: asin,
-    pageNumber: filterOptions.page.toString(),
-    sortBy: filterOptions.sortBy,
-    reviewerType: "all_reviews",
-  });
-
+  // Optional fields
   if (filterOptions.filterByStar) {
-    params.append("filterByStar", filterOptions.filterByStar);
+    formData.append("filterByStar", filterOptions.filterByStar);
   }
 
-  if (filterOptions.language) {
-    params.append("language", filterOptions.language);
+  if (filterOptions.pageNumber) {
+    formData.append("pageNumber", filterOptions.pageNumber.toString());
   }
 
-  baseURL.search = params.toString();
-  return baseURL.toString();
-};
+  if (filterOptions.reviewerType) {
+    formData.append("reviewerType", filterOptions.reviewerType);
+  }
 
+  return formData;
+}
 const fetchReviews = async (countryDomain, asin, filterOptions) => {
   try {
     // Build the URL with query parameters
-    const reviewUrl = reviewURLBuilder(countryDomain, asin, filterOptions);
+    const reviewUrl = buildReviewUrl(countryDomain);
+    const formData = buildFormData(asin, filterOptions);
 
     console.log("reviewUrl", reviewUrl);
-    // const response = await axios.get(url, {
-    //   headers: {
-    //     "User-Agent": this.randomUserAgent(),
-    //     Accept:
-    //       "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    //     "Accept-Language": "en-US,en;q=0.5",
-    //     Connection: "keep-alive",
-    //     "Upgrade-Insecure-Requests": "1",
-    //   },
-    // });
-    // console.log(
-    //   "check response ==========================================> ",
-    //   response
-    // );
-    // // Parse the HTML body response
-    // const bodyStr = response;
-    // console.log("bodyStr======================>", bodyStr);
-    // const root = parse(bodyStr);
-
-    // Assume ParseCommands and ParseReviewHTML are functions you have to handle HTML parsing
-    // const htmlStrings = ParseCommands(root); // Parse commands from HTML (custom function)
-    // const reviews = [];
-
-    // for (const htmlStr of htmlStrings) {
-    //   const review = await ParseReviewHTML(htmlStr, filterOptions); // Parse each review
-    //   if (review) {
-    //     reviews.push(review);
-    //   }
-    // }
-
-    // return reviews;
+    console.log("formData", formData);
+    const response = await axios.post(reviewUrl, {
+      headers: {
+        "User-Agent": randomUserAgent(),
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        Connection: "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "content-encoding": "gzip",
+        "content-language": "en-US",
+        "content-security-policy-report-only":
+          "default-src https://*.amazon.com https://*.media-amazon.com https://*.ssl-images-amazon.com https://*.amazon-adsystem.com; script-src https://*.amazon.com https://*.media-amazon.com https://*.ssl-images-amazon.com https://*.amazon-adsystem.com 'unsafe-inline' 'unsafe-eval'; style-src https://*.amazon.com https://*.media-amazon.com https://*.ssl-images-amazon.com https://*.amazon-adsystem.com 'unsafe-inline'; report-uri /1/batch/2/OE/mid=ATVPDKIKX0DER:sid=133-3657465-2676401:rid=FTNKZH1GCPJ6XXQTYJAZ:sn=www.amazon.com",
+        "content-type": "application/json-amazonui-streaming;charset=UTF-8",
+      },
+      formData: formData,
+    });
+    if (response.data.includes("BAAAAAAD ASIN")) {
+      throw new Error("Invalid ASIN or request blocked by Amazon");
+    }
+    console.log("response.data", response.data.toString());
+    // const htmlStrings = parseAjaxResponse(response.data);
+    // // const reviews = await parseReviews(htmlStrings, filterOptions.preset);
+    // console.log("htmlStrings", htmlStrings);
   } catch (error) {
     console.error("Error fetching reviews:", error.message);
     throw error;
   }
 };
+
+function parseAjaxResponse(data) {
+  try {
+    const records = data.split("&&&");
+    console.log("record", records);
+    // Process each segment
+    const result = records
+      .map((segment) => {
+        // Remove whitespace
+        const trimmed = segment.trim();
+
+        // Skip empty segments
+        if (!trimmed) return null;
+
+        // Skip HTML comments
+        if (trimmed.startsWith("<!--") || trimmed.startsWith("</")) {
+          return null;
+        }
+
+        // Try to parse as JSON while handling potential issues
+        const cleanedSegment = trimmed
+          // Remove any HTML comments that might be at the start
+          .replace(/^<!--[\s\S]*?-->/, "")
+          // Remove any trailing HTML or script tags
+          .replace(/<\/script>$/, "")
+          .trim();
+
+        // Parse the JSON array string
+        const parsed = JSON.parse(cleanedSegment);
+
+        // Validate that it's an array with expected structure
+        if (Array.isArray(parsed) && parsed.length === 3) {
+          return {
+            command: parsed[0],
+            selector: parsed[1],
+            content: parsed[2],
+          };
+        }
+        return null;
+      })
+      .filter((item) => item !== null); // Remove null entries
+  } catch (error) {
+    throw new Error(`Failed to parse Ajax response: ${error.message}`);
+  }
+}
+// async function parseReviews(htmlStrings, preset) {
+//   try {
+//     const reviewPromises = htmlStrings.map((html) =>
+//       parseReviewHTML(html, preset)
+//     );
+//     const reviews = await Promise.all(reviewPromises);
+//     return reviews.filter(Boolean); // Remove null values
+//   } catch (error) {
+//     throw new Error(`Failed to parse reviews: ${error.message}`);
+//   }
+// }
 // Generate random User-Agent
 function randomUserAgent() {
   const agents = [
