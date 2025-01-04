@@ -21,7 +21,6 @@ const convertToDateTime = (reviewDate) => {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     );
     console.log(`Navigating to ${url}`);
-    const { subdomain, productId } = extractDetails(url);
 
     await page.goto(url, { waitUntil: "load" });
     await delay(300);
@@ -31,8 +30,8 @@ const convertToDateTime = (reviewDate) => {
     console.log("start extract");
     const data = await extractDataProduct(page);
     console.log("product : ", data);
-    const reviews = await getDataReviews(productId, subdomain);
-    console.log("reviews : ", reviews);
+    // const reviews = await getDataReviews(productId, subdomain);
+    // console.log("reviews : ", reviews);
   } catch (error) {
     console.error("Error scraping Amazon:", error.message);
   } finally {
