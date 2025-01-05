@@ -9,7 +9,7 @@ const convertToDateTime = (reviewDate) => {
   const url = process.env.AEPRESS_URL;
 
   if (!url) {
-    console.error("Error: AMAZON_URL is not defined in .env file");
+    console.error("Error: AEPRESS_URL is not defined in .env file");
     process.exit(1);
   }
 
@@ -29,12 +29,12 @@ const convertToDateTime = (reviewDate) => {
     await loadViewMoreSpecification(page);
     await delay(1000);
     console.log("start extract");
-    const data = await extractDataProduct(page);
-    console.log("product : ", data);
-    const reviews = await getDataReviews(productId, subdomain);
-    console.log("reviews : ", reviews);
+    // const data = await extractDataProduct(page);
+    // console.log("product : ", data);
+    // const reviews = await getDataReviews(productId, subdomain);
+    // console.log("reviews : ", reviews);
   } catch (error) {
-    console.error("Error scraping Amazon:", error.message);
+    console.error("Error scraping Aliepress:", error.message);
   } finally {
     await browser.close();
   }

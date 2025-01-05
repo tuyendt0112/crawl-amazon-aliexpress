@@ -1,8 +1,16 @@
 const puppeteer = require("puppeteer");
 const axios = require("axios");
-const { getRandomBrowserConfig,generateRequestHeaders } = require("./browser-config")
+const {
+  getRandomBrowserConfig,
+  generateRequestHeaders,
+} = require("./browser-config");
 require("dotenv").config();
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const convertToDateTime = (reviewDate) => {
+  const date = new Date(reviewDate);
+  return date.toISOString();
+};
 
 (async () => {
   const url = process.env.AMAZON_URL;
@@ -12,46 +20,25 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     process.exit(1);
   }
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
 
   try {
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     );
-    // console.log(`Navigating to ${url}`);
-    // await page.goto(url, { waitUntil: "load" });
-    // await delay(300);
-    // await waitForResults(page);
-    // await delay(300);
+    console.log(`Navigating to ${url}`);
+    await page.goto(url, { waitUntil: "load" });
+    await delay(300);
+    await waitForResults(page);
+    await delay(300);
+    await scrollToReview(page);
+    await delay(2000);
     // const data = await extractDataProduct(page);
-    // // console.log("product : ", data);
-    // const token = await getDataState(page);
-    // const { asin, lazyWidgetCsrfToken } = token;
-
-    // await getDataReviews(
-    //   "B0CN9319S7",
-    //   "hKvVKcJaEeYJQ0zKUY23/ATaNaPRK695u5fTcQJhZl1pAAAAAGdf6YEAAAAB"
-    // );
-
-    // Example usage
-    const asin = "B0DG7H487F";
-
-    const countryDomain = "www.amazon.com";
-    const filterOptions = {
-      language: "en_US",
-      sortBy: "recent",
-      scope: "reviewsAjax1",
-      // reviewerType: "all_reviews",
-    };
-    const preset = { Locale: "en-US" };
-    fetchReviews(countryDomain, asin, filterOptions)
-      .then((reviews) => {
-        console.log("Fetched reviews:", reviews);
-      })
-      .catch((err) => {
-        console.error("Error:", err);
-      });
+    // console.log("product : ", data);
+    const review = await extractReviews(page);
+    console.log("review : ", review);
+    // review
   } catch (error) {
     console.error("Error scraping Amazon:", error.message);
   } finally {
@@ -64,10 +51,9 @@ const extractDataProduct = async (page) => {
     const title = document.querySelector("#productTitle")?.innerText.trim();
 
     // testing
-    const code = document
-      .querySelector("span.cr-widget-PageState .cr-state-object")
+    const check = document
+      .querySelector("div.a-profile-content span.a-profile-name")
       ?.innerText.trim();
-
     ///========
 
     let salePrice =
@@ -139,15 +125,15 @@ const extractDataProduct = async (page) => {
     };
     const country = findCountry();
     return {
-      // thumbnail,
-      // title,
-      // originalPrice,
-      // salePrice,
-      // avg_rating,
-      // total_reviews,
-      // country,
-      // sold,
-      code,
+      thumbnail,
+      title,
+      originalPrice,
+      salePrice,
+      avg_rating,
+      total_reviews,
+      country,
+      sold,
+      check,
     };
   });
   console.log("extract data successfully");
@@ -175,138 +161,112 @@ const waitForResults = async (page) => {
   }
   console.timeEnd("Results Load Time");
 };
-// hKQWqcAh6+0DkTY18seNCfO90evH6x/NLvCu7eDDFlUOAAAAAGdf69M1NzE4NDgzNy04ZjliLTRkNTItOWI3ZC0yNzBhMmM2ZTA5Mjg
-const getDataState = async (page) => {
-  try {
-    // Chọn phần tử có id="cr-state-object" và lấy giá trị trong data-state
-    const dataState = await page.$eval("#cr-state-object", (element) =>
-      element.getAttribute("data-state")
-    );
 
-    // Chuyển đổi giá trị JSON từ chuỗi nếu cần
-    const stateObject = JSON.parse(dataState);
-
-    // console.log("Data State:", stateObject);
-
-    return stateObject;
-  } catch (error) {
-    console.error("Failed to retrieve data-state:", error);
-  }
-};
-const getDataReviews = async (asin, csrf) => {
-  const language = "en_US";
-  try {
-    const response = await fetchDataReview(asin, csrf, language);
-    console.log("Reviews Data successful-->>".response);
-    // return await extractDataReviews(response?.data?.evaViewList);
-  } catch (error) {
-    console.error("Error fetching reviews:", error.message);
-  }
-};
-const fetchDataReview = async (asin, csrf, language) => {
-  const url = `https://www.amazon.com/hz/reviews-render/ajax/lazy-widgets/stream?asin=${asin}&csrf=${csrf}&language=${language}&lazyWidget=cr-age-recommendation&lazyWidget=cr-solicitation`;
-  console.log("URL:", url);
+const scrollToReview = async (page) => {
+  const reviewButtonSelector = '[data-hook="see-all-reviews-link-foot"]'; // Selector của nút View More Reviews
+  console.log("Scrolling to 'View More Reviews' button...");
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      // headers: {
-      //   "Content-Type": "application/json",
-      // },
-    });
+    let attempts = 0; // Đếm số lần cuộn
+    const maxAttempts = 20; // Giới hạn số lần cuộn để tránh vòng lặp vô hạn
 
-    if (!response.ok) {
-      throw new Error(`API call failed with status: ${response.status}`);
+    while (attempts < maxAttempts) {
+      // Kiểm tra nếu nút đã có trong DOM
+      const reviewButton = await page.$(reviewButtonSelector);
+
+      if (reviewButton) {
+        // Đảm bảo nút nằm trong viewport
+        await page.evaluate((selector) => {
+          const element = document.querySelector(selector);
+          if (element) {
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }, reviewButtonSelector);
+
+        console.log("'View More Reviews' button is now visible!");
+        return; // Thoát hàm vì nút đã được cuộn đến tầm nhìn
+      }
+
+      // Cuộn xuống theo chiều cao màn hình
+      console.log("Scrolling down...");
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+      await delay(1000); // Chờ 1 giây để trang tải thêm nội dung
+
+      // Kiểm tra nếu đã cuộn đến cuối trang
+      const isAtBottom = await page.evaluate(() => {
+        return (
+          window.innerHeight + window.scrollY >= document.body.offsetHeight - 2
+        );
+      });
+
+      if (isAtBottom) {
+        console.log(
+          "Reached the bottom of the page, 'View More Reviews' button not found."
+        );
+        break;
+      }
+
+      attempts++; // Tăng bộ đếm số lần cuộn
     }
 
-    console.log("Response Data:", response);
-
-    return response;
+    console.log("'View More Reviews' button not found after scrolling.");
   } catch (error) {
-    console.error("Error fetching data:", error);
-    throw error;
+    console.error(
+      "Error while scrolling to 'View More Reviews' button:",
+      error
+    );
   }
 };
 
-const reviewURLBuilder = (countryDomain, asin, filterOptions) => {
-  const baseURL = new URL("https://" + countryDomain);
-  baseURL.pathname =process.env.AMAZON_REVIEW_URI
+const extractReviews = async (page) => {
+  console.log("Extracting all reviews on the current page...");
 
-  const params = new URLSearchParams({
-    language: filterOptions.language,
-    asin: asin,
-    sortBy: filterOptions.sortBy,
-    scope: filterOptions.scope,
-    // pageNumber: filterOptions.page.toString(),
-    // reviewerType: "all_reviews",
+  const reviews = await page.evaluate(() => {
+    // Lấy danh sách tất cả các phần tử chứa review
+    const reviewElements = document.querySelectorAll('[data-hook="review"]');
+
+    // Duyệt qua từng phần tử để lấy dữ liệu
+    return Array.from(reviewElements).map((reviewElement) => {
+      const author =
+        reviewElement.querySelector("span.a-profile-name")?.innerText.trim() ||
+        null;
+
+      const ratingText =
+        reviewElement.querySelector("span.a-icon-alt")?.innerText.trim() ||
+        null;
+      const star = ratingText ? parseFloat(ratingText.split(" ")[0]) : null;
+
+      const content =
+        reviewElement
+          .querySelector('[data-hook="review-body"] span')
+          ?.innerText.trim() || null;
+
+      const reviewDate =
+        reviewElement
+          .querySelector('[data-hook="review-date"]')
+          ?.innerText.trim() || null;
+
+      const country = reviewDate.split(" in ")[1].split(" on ")[0];
+      const dateTime = reviewDate.split(" on ")[1];
+      const date = new Date(dateTime).toISOString();
+      const avatar =
+        reviewElement.querySelector("div.a-profile-avatar img")?.src || null;
+      const images = Array.from(
+        reviewElement.querySelectorAll('[data-hook="review-image-tile"]')
+      ).map((tile) => tile.getAttribute("data-src") || null);
+
+      return {
+        author: author,
+        content: content,
+        country: country,
+        review_date: date,
+        media: images,
+        star: star,
+        avatar: avatar,
+      };
+    });
   });
 
-  if (filterOptions.filterByStar) {
-    params.append("filterByStar", filterOptions.filterByStar);
-  }
-
-
-  const requestBody = params.toString();
-  // baseURL.search = params.toString();
-  return {url :baseURL.toString(), requestBody:requestBody}
-};
-
-const fetchReviews = async (countryDomain, asin, filterOptions) => {
-  try {
-
-    // Build the URL with query parameters
-    const {url,requestBody} = reviewURLBuilder(countryDomain, asin, filterOptions);
-    const browser = getRandomBrowserConfig();
-    const body = "language=en_US&asin=B0DG7H487F&sortBy=recent&scope=reviewsAjax1";
-     const headers = generateRequestHeaders(browser);
-    // const headers = {
-    //   'accept': 'text/html,*/*',
-    //
-    //   'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
-    //   'device-memory': '8',
-    //   'dpr': '1.125',
-    //   'ect': '4g',
-    //   'priority': 'u=1, i',
-    //   'rtt': '100',
-    //   'sec-ch-device-memory': '8',
-    //   'sec-ch-dpr': '1.125',
-    //   'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-    //   'sec-ch-ua-mobile': '?0',
-    //   'sec-ch-ua-platform': 'Windows',
-    //   'sec-ch-ua-platform-version': '15.0.0',
-    //   'sec-ch-viewport-width': '753',
-    //   'sec-fetch-dest': 'empty',
-    //   'sec-fetch-mode': 'cors',
-    //   'sec-fetch-site': 'same-origin',
-    //   'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    //   'viewport-width': '753',
-    //   'x-requested-with': 'XMLHttpRequest',
-    //   'origin':'https://www.amazon.com',
-    //   'referer': 'https://www.amazon.com/AceZone-Spire-Cancellation-Enhancing-Microphone/dp/B0C8276HMM/ref=sr_1_1_sspa?_encoding=UTF8&content-id=amzn1.sym.12129333-2117-4490-9c17-6d31baf0582a&dib=eyJ2IjoiMSJ9.PJpFmttg_jaap8hCJqMtChyHNSZFZcxh9PxSdNssUoZLlqDncqCEcFcpT1e82y0z8dQGGKLYPF4WzJwQZ3HgnLJUv2OmFL6PoLqH1voRIjeWII4RvbZRjdDPw6dRt9DPcCP5ZSf30BJARqZ2yWuQUKOJALmUTHXIJ5qRAeWo8gLvAjtRSkTirrVRITj2S75Z7EW5qvy1aL-ja92kPlVUVjAuHTiEsf8dDBg5yLAZvWs.MaeUv4C3zFSXZuoaENeGPXWOSQuybTEm2giHa5QA2bg&dib_tag=se&keywords=gaming+headsets&pd_rd_r=3663e2b7-739d-42fc-a531-8c8612869fe1&pd_rd_w=Hpa4n&pd_rd_wg=EXBI0&pf_rd_p=12129333-2117-4490-9c17-6d31baf0582a&pf_rd_r=EXN6FF7VPQV8ZQ4X5XY5&qid=1734874521&sr=8-1-spons&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&psc=1',
-    //   // 'Cookie': 'lc-main=en_US; session-id=133-1098879-2455236; session-id-time=2082787201l; session-token=x9yM37JHMDDiAvKGCXjjoNjq6tPMoT8XjDTFc3Wzxq7CLRBZfFi1rKeRCID0Ch45opTOy/irbXGRmVKGA1U+1hEek/oCzh6S3ax7enGcNKTOHG9Tb7mA7CSePKIzFq7pcqbiq2cHAbe8xyglwkbbnIVj6Dxf4qRTN/qq7ZlmElEReh6w158vSvRN4RG8HPfbWDCJUXPDUopM2bUAeyq8TqX+lNNNWoGMIogNUuNf0dN/hqWN5z49t5m6REINxGLEQi07s5O8bT0QvEMPHsfvtGnmIMpuXg782yi+rLmGzEpq/bqBLS7c3DBcpLYbOajrYa2+R64+Gr4oMlQC5caEQHTAQuXonGaX; ubid-main=131-5098464-6271323'
-    // };
-    const data = {
-      "language": "en_US",
-      "asin": "B0DG7H487F",
-      "sortBy": "recent",
-      "scope": "reviewsAjax1",
-    }
-
-    console.log("reviewUrl", url);
-    console.log("requestBody", requestBody);
-    console.log("headers", headers);
-    const response = await axios.post(url,data ,{
-       headers: headers,
-
-    });
-    console.log(
-      "check response ==========================================> ",
-      response
-    );
-
-  } catch (error) {
-    console.error("Error fetching reviews:", error.message);
-    console.log("Error fetching reviews:");
-    // throw error;
-  }
+  console.log("Extracted reviews:", reviews.length);
+  return reviews;
 };
