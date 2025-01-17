@@ -29,10 +29,10 @@ const convertToDateTime = (reviewDate) => {
     await loadViewMoreSpecification(page);
     await delay(1000);
     console.log("start extract");
-    // const data = await extractDataProduct(page);
-    // console.log("product : ", data);
-    // const reviews = await getDataReviews(productId, subdomain);
-    // console.log("reviews : ", reviews);
+    const data = await extractDataProduct(page);
+    console.log("product : ", data);
+    const reviews = await getDataReviews(productId, subdomain);
+    console.log("reviews : ", reviews);
   } catch (error) {
     console.error("Error scraping Aliepress:", error.message);
   } finally {

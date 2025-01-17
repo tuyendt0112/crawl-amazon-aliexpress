@@ -33,9 +33,9 @@ const convertToDateTime = (reviewDate) => {
     await waitForResults(page);
     await delay(300);
     await scrollToReview(page);
-    await delay(2000);
-    // const data = await extractDataProduct(page);
-    // console.log("product : ", data);
+    await delay(300);
+    const data = await extractDataProduct(page);
+    console.log("product : ", data);
     const review = await extractReviews(page);
     console.log("review : ", review);
     // review
@@ -144,17 +144,20 @@ const waitForResults = async (page) => {
   console.log("Scrolling to find review button...");
   console.time("Results Load Time");
   try {
-    let reviewButton = await page.$('[data-hook="write-review-button"]');
+    await page.waitForSelector("div#prodDetails", {
+      timeout: 60000,
+    });
+    // let reviewButton = await page.$("div#prodDetails");
 
-    while (reviewButton === null) {
-      console.log("Scrolling down...");
-      await page.evaluate(() => window.scrollBy(0, 500));
-      await delay(1000);
-      reviewButton = await page.$('[data-hook="write-review-button"]');
-    }
-    await page.evaluate(() => window.scrollBy(0, 1200));
+    // while (reviewButton === null) {
+    //   console.log("Scrolling down...");
+    //   await page.evaluate(() => window.scrollBy(0, 500));
+    //   await delay(1000);
+    //   reviewButton = await page.$("div#prodDetails");
+    // }
+    // await page.evaluate(() => window.scrollBy(0, 1200));
     console.log("Review button found!");
-    await delay(2000);
+    // await delay(2000);
   } catch (error) {
     console.error("Failed to find review button:", error);
     throw error;
