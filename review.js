@@ -1,134 +1,38 @@
 const axios = require("axios");
-const cheerio = require("cheerio");
-const moment = require("moment");
 
-const buildReviewUrl = (countryDomain, asin, filterOptions) => {
-  const baseUrl = new URL(
-    `https://${countryDomain}/hz/reviews-render/ajax/medley-filtered-reviews/get/ref=cm_cr_dp_d_fltrs_srt`
-  );
+const url = "https://picturetotext.info/picture-to-text";
+const data = "data=yourDataHere"; // Dữ liệu bạn muốn gửi
 
-  const params = new URLSearchParams({
-    scope: "reviewsAjax1",
-    asin: asin,
-    // pageNumber: filterOptions.page || "1",
-    sortBy: filterOptions.sortBy || "recent",
-    reviewerType: "all_reviews",
+const headers = {
+  "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+  "X-CSRF-TOKEN":
+    "eyJpdiI6IlFwY3VJUEVnWFhhUWd3L2tQRkhBMXc9PSIsInZhbHVlIjoiZUJibkdFcjA2c3pncGlCS0lHNjlFSDFka0NaVnllS3FZb2syaWY1SDl3eGtUZ0Fjd2ExL1picXQ4VUJ2aTNteEZXOHhkY3lnMnowL084L3M1UThrVlBjTlh4RFU0b3ZPYXRMRWlNcW9ZV1VTYmZyUjFVaHh5RitwS2oyUjBQVG8iLCJtYWMiOiIzYmM2NmM0ZWNlYWE3NWQwZjc2MzJkNjc4M2MxYzBmZDM3MzE1YTA1MmY5NjYxYWM3YTU2OWVjYjc1MDM3ZDRmIiwidGFnIjoiIn0%3D", // CSRF token
+  "x-requested-with": "XMLHttpRequest",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept: "*/*",
+  "Accept-Encoding": "gzip, deflate, br, zstd",
+  "Accept-Language": "en-US,en;q=0.9",
+  Origin: "https://picturetotext.info",
+  Referer: "https://picturetotext.info/",
+  "Sec-Fetch-Dest": "empty",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Site": "same-origin",
+  "XSRF-TOKEN":
+    "eyJpdiI6IlFwY3VJUEVnWFhhUWd3L2tQRkhBMXc9PSIsInZhbHVlIjoiZUJibkdFcjA2c3pncGlCS0lHNjlFSDFka0NaVnllS3FZb2syaWY1SDl3eGtUZ0Fjd2ExL1picXQ4VUJ2aTNteEZXOHhkY3lnMnowL084L3M1UThrVlBjTlh4RFU0b3ZPYXRMRWlNcW9ZV1VTYmZyUjFVaHh5RitwS2oyUjBQVG8iLCJtYWMiOiIzYmM2NmM0ZWNlYWE3NWQwZjc2MzJkNjc4M2MxYzBmZDM3MzE1YTA1MmY5NjYxYWM3YTU2OWVjYjc1MDM3ZDRmIiwidGFnIjoiIn0%3D",
+  laravel_session:
+    "eyJpdiI6Imp1N04yZU9GeTRRV3V4V2ZLYStzcHc9PSIsInZhbHVlIjoiTzVvbVFEaTAxbWwwM3B6Zi9rNE9MTDZuZmsvZHJxTmFTd1VDcjRRQzZtYUtoNndROHp1WDlUVWpyUVQyT2tQbWthMFZuaE1ZWFhZWjU4Mlhleitka3J1NTdrS1d6akxHbEdRTU9MMk45NkZxbGNtMmNaZTRrdXVSdWNGZG9HMTUiLCJtYWMiOiIwMWM0NThkMzFlMjhkNmJhNGU5MmI1NTVmZTc3NWVkZDUxYTNmZGViM2U0NmE0ZTE4MjUyZDhkZjc5YWM3MDE0IiwidGFnIjoiIn0%3D",
+};
+
+// Gửi yêu cầu POST
+axios
+  .post(url, data, { headers })
+  .then((response) => {
+    console.log("Response:", response.data);
+  })
+  .catch((error) => {
+    console.error(
+      "Error:",
+      error.response ? error.response.data : error.message
+    );
   });
-
-  baseUrl.search = params.toString();
-  return baseUrl.toString();
-};
-
-const parseCommands = (data) => {
-  if (!data || typeof data !== "string") return [];
-
-  try {
-    return data
-      .split("&&&")
-      .map((record) => {
-        try {
-          const commandArray = JSON.parse(record.trim());
-          if (!Array.isArray(commandArray) || commandArray.length !== 3)
-            return null;
-          return {
-            command: commandArray[0],
-            selector: commandArray[1],
-            content: commandArray[2],
-          };
-        } catch (err) {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .filter((cmd) => cmd.command === "appendFadeIn")
-      .map((cmd) => cmd.content);
-  } catch (err) {
-    console.error("Error parsing commands:", err);
-    return [];
-  }
-};
-
-const parseStarRating = ($starEl) => {
-  try {
-    const starClass = $starEl.attr("class") || "";
-    const starMatch = starClass.match(/a-star-(\d)/);
-    return starMatch ? parseInt(starMatch[1]) : 0;
-  } catch {
-    return 0;
-  }
-};
-
-const parseContent = (content) => {
-  try {
-    return content
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'")
-      .trim()
-      .replace(/\s+/g, " ");
-  } catch {
-    return content;
-  }
-};
-
-const parseReviewHtml = (html) => {
-  try {
-    const $ = cheerio.load(html);
-    const reviewDiv = $('div[data-hook="review"]');
-    if (!reviewDiv.length) return null;
-
-    return {
-      amazonId: reviewDiv.attr("id"),
-      author: $("span.a-profile-name").first().text().trim(),
-      avatar: $("div.a-profile-avatar img").attr("data-src"),
-      star: parseStarRating($('i[data-hook="review-star-rating"]').first()),
-      content: parseContent($(".reviewText").text()),
-      date: $('span[data-hook="review-date"]').text(),
-      images: $("img.cr-lightbox-image-thumbnail")
-        .map((_, el) => $(el).attr("src")?.replace("_SY88.", ""))
-        .get()
-        .filter(Boolean),
-      verified: $('[data-hook="avp-badge"]').length > 0,
-    };
-  } catch (err) {
-    console.error("Error parsing review HTML:", err);
-    return null;
-  }
-};
-
-const fetchReviews = async (countryDomain, asin, options = {}) => {
-  try {
-    const url = buildReviewUrl(countryDomain, asin, options);
-    console.log("url >>>>>>>>>", url);
-    const response = await axios({
-      method: "POST",
-      url,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        Accept: "text/html,*/*",
-        "Accept-Language": "en-US,en;q=0.5",
-        Connection: "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-      },
-    });
-    console.log("respinse >>>>>>>>>>", response);
-    // const htmlStrings = parseCommands(response.data);
-    // const reviews = htmlStrings
-    //   .map((html) => parseReviewHtml(html))
-    //   .filter(Boolean);
-
-    return reviews;
-  } catch (err) {
-    console.error("Error fetching reviews:", err);
-    throw err;
-  }
-};
-
-module.exports = {
-  fetchReviews,
-  parseReviewHtml,
-  parseCommands,
-};
