@@ -25,6 +25,8 @@
     "playwright": "^1.49.1",
     "playwright-core": "^1.49.1",
     "puppeteer": "^23.11.1",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin": "^3.2.3",
     "recaptcha-solver": "^0.3.0",
     "request": "^2.88.2",
     "sharp": "^0.33.5",
